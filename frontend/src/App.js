@@ -473,7 +473,9 @@ function App() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [eventTypeFilters, setEventTypeFilters] = useState([]); // 多選
-  const [diseaseAreaFilters, setDiseaseAreaFilters] = useState([]); // 多選
+  const [diseaseAreaFilters, setDiseaseAreaFilters] = useState([]); // 多選 - 疾患領域（第1階層）
+  const [diseaseCategoryFilters, setDiseaseCategoryFilters] = useState([]); // 多選 - 疾患カテゴリ（第2階層）
+  const [diseaseSubcategoryFilters, setDiseaseSubcategoryFilters] = useState([]); // 多選 - 疾患サブカテゴリ（第3階層）
   const [companyFilters, setCompanyFilters] = useState([]); // 多選
   const [drugKeyFilters, setDrugKeyFilters] = useState([]); // 多選 - 一般名/製品名（組み合わせキー）フィルター
   const [startDate, setStartDate] = useState(() => subMonths(new Date(), 1)); // デフォルト：1ヶ月前から
@@ -557,12 +559,28 @@ function App() {
   }, [data, startDate, endDate]);
 
   // フィルター選択肢を計算（日付範囲内のデータから取得）
+  // 疾患フィルターは級聯（カスケード）形式：area → category → subcategory
   const filterOptions = useMemo(() => {
     const eventTypes = [...new Set(dateFilteredData.map(d => d.event_type))].filter(Boolean).sort();
-    const diseaseAreas = [...new Set(dateFilteredData.map(d => d.disease_area))].filter(Boolean).sort();
     const companies = [...new Set(dateFilteredData.map(d => d.company))].filter(Boolean).sort();
-    return { eventTypes, diseaseAreas, companies };
-  }, [dateFilteredData]);
+
+    // 疾患領域（第1階層）- 常に全データから取得
+    const diseaseAreas = [...new Set(dateFilteredData.map(d => d.disease_area))].filter(Boolean).sort();
+
+    // 疾患カテゴリ（第2階層）- 選択された疾患領域に基づいてフィルタリング
+    const filteredByArea = diseaseAreaFilters.length === 0
+      ? dateFilteredData
+      : dateFilteredData.filter(d => diseaseAreaFilters.includes(d.disease_area));
+    const diseaseCategories = [...new Set(filteredByArea.map(d => d.disease_category))].filter(Boolean).sort();
+
+    // 疾患サブカテゴリ（第3階層）- 選択された疾患カテゴリに基づいてフィルタリング
+    const filteredByCategory = diseaseCategoryFilters.length === 0
+      ? filteredByArea
+      : filteredByArea.filter(d => diseaseCategoryFilters.includes(d.disease_category));
+    const diseaseSubcategories = [...new Set(filteredByCategory.map(d => d.disease_subcategory))].filter(Boolean).sort();
+
+    return { eventTypes, diseaseAreas, diseaseCategories, diseaseSubcategories, companies };
+  }, [dateFilteredData, diseaseAreaFilters, diseaseCategoryFilters]);
 
   // 一般名/製品名組み合わせキーを生成するヘルパー関数
   const getDrugKey = (commonName, drugName) => {
@@ -585,6 +603,8 @@ function App() {
 
       const matchesEventType = eventTypeFilters.length === 0 || eventTypeFilters.includes(item.event_type);
       const matchesDiseaseArea = diseaseAreaFilters.length === 0 || diseaseAreaFilters.includes(item.disease_area);
+      const matchesDiseaseCategory = diseaseCategoryFilters.length === 0 || diseaseCategoryFilters.includes(item.disease_category);
+      const matchesDiseaseSubcategory = diseaseSubcategoryFilters.length === 0 || diseaseSubcategoryFilters.includes(item.disease_subcategory);
       const matchesCompany = companyFilters.length === 0 || companyFilters.includes(item.company);
 
       // 日付フィルタリング
@@ -594,7 +614,7 @@ function App() {
         (!endDate || isBefore(itemDate, endDate) || itemDate.toDateString() === endDate.toDateString())
       );
 
-      return matchesSearch && matchesEventType && matchesDiseaseArea && matchesCompany && matchesDateRange;
+      return matchesSearch && matchesEventType && matchesDiseaseArea && matchesDiseaseCategory && matchesDiseaseSubcategory && matchesCompany && matchesDateRange;
     });
 
     // 一般名/製品名の組み合わせキーを生成
@@ -604,7 +624,7 @@ function App() {
       if (key) keys.add(key);
     });
     return [...keys].sort();
-  }, [data, searchQuery, eventTypeFilters, diseaseAreaFilters, companyFilters, startDate, endDate]);
+  }, [data, searchQuery, eventTypeFilters, diseaseAreaFilters, diseaseCategoryFilters, diseaseSubcategoryFilters, companyFilters, startDate, endDate]);
 
   // フィルタリングされたデータ
   const filteredData = useMemo(() => {
@@ -618,6 +638,8 @@ function App() {
 
       const matchesEventType = eventTypeFilters.length === 0 || eventTypeFilters.includes(item.event_type);
       const matchesDiseaseArea = diseaseAreaFilters.length === 0 || diseaseAreaFilters.includes(item.disease_area);
+      const matchesDiseaseCategory = diseaseCategoryFilters.length === 0 || diseaseCategoryFilters.includes(item.disease_category);
+      const matchesDiseaseSubcategory = diseaseSubcategoryFilters.length === 0 || diseaseSubcategoryFilters.includes(item.disease_subcategory);
       const matchesCompany = companyFilters.length === 0 || companyFilters.includes(item.company);
 
       // 一般名/製品名組み合わせキーでフィルタリング
@@ -631,9 +653,9 @@ function App() {
         (!endDate || isBefore(itemDate, endDate) || itemDate.toDateString() === endDate.toDateString())
       );
 
-      return matchesSearch && matchesEventType && matchesDiseaseArea && matchesCompany && matchesDrugKey && matchesDateRange;
+      return matchesSearch && matchesEventType && matchesDiseaseArea && matchesDiseaseCategory && matchesDiseaseSubcategory && matchesCompany && matchesDrugKey && matchesDateRange;
     });
-  }, [data, searchQuery, eventTypeFilters, diseaseAreaFilters, companyFilters, drugKeyFilters, startDate, endDate]);
+  }, [data, searchQuery, eventTypeFilters, diseaseAreaFilters, diseaseCategoryFilters, diseaseSubcategoryFilters, companyFilters, drugKeyFilters, startDate, endDate]);
 
   // 最近の更新データ（直近7日間）
   const recentUpdates = useMemo(() => {
@@ -657,11 +679,22 @@ function App() {
     // 全イベントタイプを収集
     const allEventTypes = new Set();
 
+    const byDiseaseCategory = {};
+    const byDiseaseSubcategory = {};
+
     filteredData.forEach(item => {
       if (item.event_type) allEventTypes.add(item.event_type);
       byEventType[item.event_type] = (byEventType[item.event_type] || 0) + 1;
       const area = item.disease_area || 'その他';
       byDiseaseArea[area] = (byDiseaseArea[area] || 0) + 1;
+      // 疾患カテゴリ集計
+      if (item.disease_category) {
+        byDiseaseCategory[item.disease_category] = (byDiseaseCategory[item.disease_category] || 0) + 1;
+      }
+      // 疾患サブカテゴリ集計
+      if (item.disease_subcategory) {
+        byDiseaseSubcategory[item.disease_subcategory] = (byDiseaseSubcategory[item.disease_subcategory] || 0) + 1;
+      }
       byCompany[item.company] = (byCompany[item.company] || 0) + 1;
       if (item.drug_name) {
         byDrugName[item.drug_name] = (byDrugName[item.drug_name] || 0) + 1;
@@ -680,6 +713,16 @@ function App() {
     });
 
     const diseaseChartData = Object.entries(byDiseaseArea)
+      .map(([name, value]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, value, fullName: name }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    const diseaseCategoryChartData = Object.entries(byDiseaseCategory)
+      .map(([name, value]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, value, fullName: name }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    const diseaseSubcategoryChartData = Object.entries(byDiseaseSubcategory)
       .map(([name, value]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, value, fullName: name }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
@@ -791,6 +834,7 @@ function App() {
     });
 
     // Step 2: 全データから、表示対象の薬品の全ステータス履歴を集計
+    // 適応症-ステータス履歴は1対1の関係（各ステータスごとに適応症を記録）
     const drugAggregation = {};
     data.forEach(item => {
       const cn = item.common_name || '';
@@ -811,33 +855,42 @@ function App() {
           company: comp,
           drugFunction: item.drug_function || '',
           diseaseArea: item.disease_area || '',
-          indications: new Set(),
-          // ステータス履歴（薬品全体で集約、重複排除用にMapを使用）
-          statusMap: new Map(),
+          diseaseCategory: item.disease_category || '',
+          diseaseSubcategory: item.disease_subcategory || '',
+          // ステータス履歴（ステータス+適応症の組み合わせをキーとして使用）
+          // キー: "status|indication" でユニーク化
+          statusIndicationMap: new Map(),
           latestUpdate: null,
           latestUpdateStr: '',
         };
       }
 
-      // disease_area, drugFunctionがある場合は更新（空でない値を優先）
+      // disease_area, diseaseCategory, diseaseSubcategory, drugFunctionがある場合は更新（空でない値を優先）
       if (item.disease_area && !drugAggregation[drugKey].diseaseArea) {
         drugAggregation[drugKey].diseaseArea = item.disease_area;
+      }
+      if (item.disease_category && !drugAggregation[drugKey].diseaseCategory) {
+        drugAggregation[drugKey].diseaseCategory = item.disease_category;
+      }
+      if (item.disease_subcategory && !drugAggregation[drugKey].diseaseSubcategory) {
+        drugAggregation[drugKey].diseaseSubcategory = item.disease_subcategory;
       }
       if (item.drug_function && !drugAggregation[drugKey].drugFunction) {
         drugAggregation[drugKey].drugFunction = item.drug_function;
       }
-      // indicationを収集
-      if (item.indication) {
-        drugAggregation[drugKey].indications.add(item.indication);
-      }
 
-      // ステータス履歴を追加（同じステータスは最新の日付で更新）
+      // ステータス履歴を追加（ステータス+適応症の組み合わせでユニーク化）
       const status = item.event_type;
+      const indication = item.indication || '';
       if (status) {
-        const existing = drugAggregation[drugKey].statusMap.get(status);
+        // ステータスと適応症の組み合わせをキーとする
+        const statusIndicationKey = `${status}|${indication}`;
+        const existing = drugAggregation[drugKey].statusIndicationMap.get(statusIndicationKey);
+        // 同じステータス+適応症の組み合わせがある場合は最新の日付で更新
         if (!existing || (itemDate && existing.date && itemDate > existing.date)) {
-          drugAggregation[drugKey].statusMap.set(status, {
+          drugAggregation[drugKey].statusIndicationMap.set(statusIndicationKey, {
             status,
+            indication,
             date: itemDate,
             datetime: item.datetime,
           });
@@ -863,11 +916,13 @@ function App() {
         company: drug.company,
         drugFunction: drug.drugFunction,
         diseaseArea: drug.diseaseArea,
-        indications: Array.from(drug.indications),
+        diseaseCategory: drug.diseaseCategory,
+        diseaseSubcategory: drug.diseaseSubcategory,
         latestUpdate: drug.latestUpdate,
         latestUpdateStr: drug.latestUpdateStr,
         // MapをArrayに変換し、日付順（古い順）にソート
-        statusHistory: Array.from(drug.statusMap.values()).sort((a, b) => {
+        // 各エントリにはstatus, indication, date, datetimeが含まれる
+        statusHistory: Array.from(drug.statusIndicationMap.values()).sort((a, b) => {
           if (!a.date || !b.date) return 0;
           return a.date - b.date;
         }),
@@ -877,17 +932,32 @@ function App() {
         return b.latestUpdate - a.latestUpdate;
       });
 
-    return { byEventType, diseaseChartData, companyChartData, drugNameChartData, eventTypeChartData, timelineData, eventTypeList, drugKeyTimelineData, aggregatedDrugData };
+    return { byEventType, diseaseChartData, diseaseCategoryChartData, diseaseSubcategoryChartData, companyChartData, drugNameChartData, eventTypeChartData, timelineData, eventTypeList, drugKeyTimelineData, aggregatedDrugData };
   }, [filteredData, data]);
 
   const clearFilters = () => {
     setSearchQuery('');
     setEventTypeFilters([]);
     setDiseaseAreaFilters([]);
+    setDiseaseCategoryFilters([]);
+    setDiseaseSubcategoryFilters([]);
     setCompanyFilters([]);
     setDrugKeyFilters([]);
     setStartDate(subMonths(new Date(), 1));
     setEndDate(new Date());
+  };
+
+  // 疾患領域が変更されたら、カテゴリとサブカテゴリをクリア
+  const handleDiseaseAreaChange = (value) => {
+    setDiseaseAreaFilters(value);
+    setDiseaseCategoryFilters([]);
+    setDiseaseSubcategoryFilters([]);
+  };
+
+  // 疾患カテゴリが変更されたら、サブカテゴリをクリア
+  const handleDiseaseCategoryChange = (value) => {
+    setDiseaseCategoryFilters(value);
+    setDiseaseSubcategoryFilters([]);
   };
 
   // 日付が変更されたかどうか
@@ -898,6 +968,8 @@ function App() {
   const hasActiveFilters = searchQuery ||
     eventTypeFilters.length > 0 ||
     diseaseAreaFilters.length > 0 ||
+    diseaseCategoryFilters.length > 0 ||
+    diseaseSubcategoryFilters.length > 0 ||
     companyFilters.length > 0 ||
     drugKeyFilters.length > 0 ||
     isDateModified;
@@ -1044,7 +1116,7 @@ function App() {
                       lineHeight: 1.2,
                     }}
                   >
-                    MediTrack
+                    MediLine
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Drug Pipeline Tracker
@@ -1330,13 +1402,14 @@ function App() {
                             }
                           />
                         </Grid>
-                        <Grid item xs={12} md={2.75}>
+                        {/* 疾患フィルター - 級聯（カスケード）形式 */}
+                        <Grid item xs={12} md={2}>
                           <Autocomplete
                             multiple
                             size="small"
                             options={filterOptions.diseaseAreas}
                             value={diseaseAreaFilters}
-                            onChange={(e, value) => setDiseaseAreaFilters(value)}
+                            onChange={(e, value) => handleDiseaseAreaChange(value)}
                             renderInput={(params) => <TextField {...params} label="疾患領域" placeholder="選択..." />}
                             renderTags={(value, getTagProps) =>
                               value.map((option, index) => (
@@ -1351,7 +1424,51 @@ function App() {
                             }
                           />
                         </Grid>
-                        <Grid item xs={12} md={2.75}>
+                        <Grid item xs={12} md={2}>
+                          <Autocomplete
+                            multiple
+                            size="small"
+                            options={filterOptions.diseaseCategories}
+                            value={diseaseCategoryFilters}
+                            onChange={(e, value) => handleDiseaseCategoryChange(value)}
+                            disabled={filterOptions.diseaseCategories.length === 0}
+                            renderInput={(params) => <TextField {...params} label="疾患カテゴリ" placeholder="選択..." />}
+                            renderTags={(value, getTagProps) =>
+                              value.map((option, index) => (
+                                <Chip
+                                  {...getTagProps({ index })}
+                                  key={option}
+                                  label={option}
+                                  size="small"
+                                  sx={{ bgcolor: alpha('#a855f7', 0.1), color: '#a855f7' }}
+                                />
+                              ))
+                            }
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={2}>
+                          <Autocomplete
+                            multiple
+                            size="small"
+                            options={filterOptions.diseaseSubcategories}
+                            value={diseaseSubcategoryFilters}
+                            onChange={(e, value) => setDiseaseSubcategoryFilters(value)}
+                            disabled={filterOptions.diseaseSubcategories.length === 0}
+                            renderInput={(params) => <TextField {...params} label="疾患詳細" placeholder="選択..." />}
+                            renderTags={(value, getTagProps) =>
+                              value.map((option, index) => (
+                                <Chip
+                                  {...getTagProps({ index })}
+                                  key={option}
+                                  label={option}
+                                  size="small"
+                                  sx={{ bgcolor: alpha('#c084fc', 0.1), color: '#c084fc' }}
+                                />
+                              ))
+                            }
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={2}>
                           <Autocomplete
                             multiple
                             size="small"
@@ -1438,11 +1555,29 @@ function App() {
                       })}
                       {diseaseAreaFilters.map(filter => (
                         <Chip
-                          key={filter}
-                          label={filter}
+                          key={`area-${filter}`}
+                          label={`領域: ${filter}`}
                           size="small"
-                          onDelete={() => setDiseaseAreaFilters(prev => prev.filter(f => f !== filter))}
+                          onDelete={() => handleDiseaseAreaChange(diseaseAreaFilters.filter(f => f !== filter))}
                           sx={{ bgcolor: alpha('#8b5cf6', 0.1), color: '#8b5cf6' }}
+                        />
+                      ))}
+                      {diseaseCategoryFilters.map(filter => (
+                        <Chip
+                          key={`cat-${filter}`}
+                          label={`カテゴリ: ${filter}`}
+                          size="small"
+                          onDelete={() => handleDiseaseCategoryChange(diseaseCategoryFilters.filter(f => f !== filter))}
+                          sx={{ bgcolor: alpha('#a855f7', 0.1), color: '#a855f7' }}
+                        />
+                      ))}
+                      {diseaseSubcategoryFilters.map(filter => (
+                        <Chip
+                          key={`subcat-${filter}`}
+                          label={`詳細: ${filter}`}
+                          size="small"
+                          onDelete={() => setDiseaseSubcategoryFilters(prev => prev.filter(f => f !== filter))}
+                          sx={{ bgcolor: alpha('#c084fc', 0.1), color: '#c084fc' }}
                         />
                       ))}
                       {companyFilters.map(filter => (
@@ -1509,7 +1644,7 @@ function App() {
                         <Box
                           sx={{
                             display: 'grid',
-                            gridTemplateColumns: '180px 80px 80px 1fr 180px 80px',
+                            gridTemplateColumns: '180px 100px 100px 100px 80px 1fr 80px',
                             gap: 1,
                             px: 1.5,
                             py: 1,
@@ -1518,14 +1653,15 @@ function App() {
                             fontWeight: 600,
                             color: 'text.secondary',
                             fontSize: '0.75rem',
-                            minWidth: 800,
+                            minWidth: 900,
                           }}
                         >
                           <Box>一般名 & 製品名 / 企業名</Box>
                           <Box>疾患領域</Box>
+                          <Box>疾患カテゴリ</Box>
+                          <Box>疾患詳細</Box>
                           <Box>薬効分類</Box>
-                          <Box>適応症</Box>
-                          <Box>ステータス履歴</Box>
+                          <Box>適応症 - ステータス履歴</Box>
                           <Box>更新日</Box>
                         </Box>
 
@@ -1535,13 +1671,13 @@ function App() {
                             key={`${drug.commonName}-${drug.drugName}-${drug.company}-${drugIndex}`}
                             sx={{
                               display: 'grid',
-                              gridTemplateColumns: '180px 80px 80px 1fr 180px 80px',
+                              gridTemplateColumns: '180px 100px 100px 100px 80px 1fr 80px',
                               gap: 1,
                               px: 1.5,
                               py: 1,
                               alignItems: 'flex-start',
                               borderBottom: '1px solid #f1f5f9',
-                              minWidth: 800,
+                              minWidth: 900,
                               '&:hover': {
                                 bgcolor: '#fafbfc',
                               },
@@ -1603,6 +1739,36 @@ function App() {
                               </Typography>
                             </Box>
 
+                            {/* 疾患カテゴリ */}
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: 'text.primary',
+                                  fontSize: '0.75rem',
+                                  wordBreak: 'break-word',
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {drug.diseaseCategory || '-'}
+                              </Typography>
+                            </Box>
+
+                            {/* 疾患詳細 */}
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: 'text.primary',
+                                  fontSize: '0.75rem',
+                                  wordBreak: 'break-word',
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {drug.diseaseSubcategory || '-'}
+                              </Typography>
+                            </Box>
+
                             {/* 薬効分類 */}
                             <Box>
                               <Typography
@@ -1618,75 +1784,83 @@ function App() {
                               </Typography>
                             </Box>
 
-                            {/* 適応症 */}
-                            <Box>
-                              {drug.indications && drug.indications.length > 0 ? (
-                                drug.indications.map((ind, indIndex) => (
-                                  <Typography
-                                    key={indIndex}
-                                    variant="body2"
-                                    sx={{
-                                      color: 'text.secondary',
-                                      fontSize: '0.75rem',
-                                      wordBreak: 'break-word',
-                                      lineHeight: 1.3,
-                                      mb: indIndex < drug.indications.length - 1 ? 0.25 : 0,
-                                    }}
-                                  >
-                                    {ind}
-                                  </Typography>
-                                ))
+                            {/* 適応症 - ステータス履歴（1対1で表示） */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              {drug.statusHistory && drug.statusHistory.length > 0 ? (
+                                drug.statusHistory.map((sh, shIndex) => {
+                                  const color = getEventTypeColor(sh.status, shIndex);
+                                  const dateStr = sh.datetime ? sh.datetime.split(' ')[0] : '';
+                                  return (
+                                    <Box
+                                      key={shIndex}
+                                      sx={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 1,
+                                        pb: 0.5,
+                                        borderBottom: shIndex < drug.statusHistory.length - 1 ? '1px dashed #e2e8f0' : 'none',
+                                      }}
+                                    >
+                                      {/* ステータス部分 */}
+                                      <Box
+                                        sx={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 0.5,
+                                          minWidth: 100,
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        <Box
+                                          sx={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: '50%',
+                                            bgcolor: color,
+                                            flexShrink: 0,
+                                          }}
+                                        />
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            color: color,
+                                            fontWeight: 500,
+                                            fontSize: '0.7rem',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {sh.status}
+                                        </Typography>
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            color: 'text.secondary',
+                                            fontSize: '0.65rem',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {dateStr}
+                                        </Typography>
+                                      </Box>
+                                      {/* 適応症部分 */}
+                                      <Typography
+                                        variant="body2"
+                                        sx={{
+                                          color: 'text.secondary',
+                                          fontSize: '0.75rem',
+                                          wordBreak: 'break-word',
+                                          lineHeight: 1.3,
+                                          flex: 1,
+                                        }}
+                                      >
+                                        {sh.indication || '-'}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                })
                               ) : (
                                 <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>-</Typography>
                               )}
-                            </Box>
-
-                            {/* ステータス履歴 - 縦方向に表示 */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                              {drug.statusHistory && drug.statusHistory.map((sh, shIndex) => {
-                                const color = getEventTypeColor(sh.status, shIndex);
-                                const dateStr = sh.datetime ? sh.datetime.split(' ')[0] : '';
-                                return (
-                                  <Box
-                                    key={shIndex}
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    <Box
-                                      sx={{
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: '50%',
-                                        bgcolor: color,
-                                        flexShrink: 0,
-                                      }}
-                                    />
-                                    <Typography
-                                      variant="body2"
-                                      sx={{
-                                        color: color,
-                                        fontWeight: 500,
-                                        fontSize: '0.7rem',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {sh.status}
-                                    </Typography>
-                                    <Typography
-                                      variant="caption"
-                                      sx={{
-                                        color: 'text.secondary',
-                                        fontSize: '0.65rem',
-                                      }}
-                                    >
-                                      {dateStr}
-                                    </Typography>
-                                  </Box>
-                                );
-                              })}
                             </Box>
 
                             {/* 更新日 */}
@@ -1762,25 +1936,65 @@ function App() {
                           </Paper>
                         </Grid>
 
-                        <Grid item xs={12} md={6}>
+                        {/* 疾患関連の3つのグラフ */}
+                        <Grid item xs={12} md={4}>
                           <Paper sx={{ p: 2, border: '1px solid #e2e8f0' }}>
-                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                              疾患領域別
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                              疾患領域別 Top 10
                             </Typography>
-                            <ResponsiveContainer width="100%" height={300}>
+                            <ResponsiveContainer width="100%" height={280}>
                               <BarChart data={stats.diseaseChartData} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                <XAxis type="number" />
-                                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+                                <XAxis type="number" tick={{ fontSize: 10 }} />
+                                <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
                                 <RechartsTooltip
                                   formatter={(value, name, props) => [value, props.payload.fullName]}
                                   contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
                                 />
-                                <Bar dataKey="value" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </Paper>
                         </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, border: '1px solid #e2e8f0' }}>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                              疾患カテゴリ別 Top 10
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={280}>
+                              <BarChart data={stats.diseaseCategoryChartData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                <XAxis type="number" tick={{ fontSize: 10 }} />
+                                <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+                                <RechartsTooltip
+                                  formatter={(value, name, props) => [value, props.payload.fullName]}
+                                  contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                                />
+                                <Bar dataKey="value" fill="#a855f7" radius={[0, 4, 4, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, border: '1px solid #e2e8f0' }}>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                              疾患詳細別 Top 10
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={280}>
+                              <BarChart data={stats.diseaseSubcategoryChartData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                <XAxis type="number" tick={{ fontSize: 10 }} />
+                                <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+                                <RechartsTooltip
+                                  formatter={(value, name, props) => [value, props.payload.fullName]}
+                                  contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                                />
+                                <Bar dataKey="value" fill="#c084fc" radius={[0, 4, 4, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </Paper>
+                        </Grid>
+
                         <Grid item xs={12} md={6}>
                           <Paper sx={{ p: 2, border: '1px solid #e2e8f0' }}>
                             <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>

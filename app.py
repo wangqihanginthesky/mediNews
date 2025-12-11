@@ -90,6 +90,8 @@ def fetch_medical_data() -> List[Dict]:
                 "id": doc.id,
                 "event_type": to_string(doc_dict.get("event_type", "")),
                 "disease_area": to_string(doc_dict.get("disease_area", "")),
+                "disease_category": to_string(doc_dict.get("disease_category", "")),
+                "disease_subcategory": to_string(doc_dict.get("disease_subcategory", "")),
                 "company": to_string(company),
                 "drug_name": to_string(doc_dict.get("normalized_drug_name") or doc_dict.get("drug_name", "")),
                 "common_name": to_string(doc_dict.get("common_name", "")),
