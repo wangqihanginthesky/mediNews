@@ -32,3 +32,6 @@ npm-debug.log*
 
 # CSV data files (large)
 *.csv
+
+# ClinicalTrials.gov POC のローカル出力（生成物）
+data/clinicaltrials/
